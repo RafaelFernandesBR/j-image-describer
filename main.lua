@@ -8,8 +8,10 @@ import "com.androlua.*"
 import "android.graphics.Bitmap"
 import "java.util.Locale"
 
+-- Variáveis globais
 vision_api_url = "https://visionbot.ru/apiv2/in.php"
 result_url = "https://visionbot.ru/apiv2/res.php"
+configPath = "/sdcard/config.json"  -- Caminho do arquivo de configuração
 
 local resultFound = false  -- Variável para parar a execução quando o resultado for encontrado
 
@@ -21,9 +23,57 @@ function getLanguageCode()
     return langCode
 end
 
--- obter resultado
+-- Função para carregar o arquivo de configuração
+function loadConfig()
+    local file = io.open(configPath, "r")
+    if file then
+        local content = file:read("*a")
+        file:close()
+        return json.decode(content)
+    else
+        return nil
+    end
+end
+
+-- Função para salvar as configurações
+function saveConfig(config)
+    local file = io.open(configPath, "w")
+    if file then
+        file:write(json.encode(config))
+        file:close()
+    else
+        print("Erro ao salvar configurações.")
+    end
+end
+
+-- Função para verificar se as configurações já existem ou precisam ser definidas
+function checkAndSetupConfig()
+    local config = loadConfig()
+    if config == nil then
+        showConfigDialog()
+    else
+        return config
+    end
+end
+
+-- Função para exibir a tela de configuração
+function showConfigDialog()
+    local options = {"Sim", "Não"}
+    local dlg = LuaDialog().setTitle("Copiar imagem para área de transferência?")
+                        .setItems(options)
+                        .show()
+
+    dlg.onItemClick = function(l, v, p, i)
+        dlg.dismiss()
+        local config = {copyToClipboard = i == 0}  -- 0 para "Sim", 1 para "Não"
+        saveConfig(config)
+        showOptionsDialog()  -- Exibir o diálogo de escolha após configurar
+    end
+end
+
+-- Função para obter resultado
 function getRecognitionResult(reqId, attempt)
-    if resultFound or attempt > 30 then  -- Verifica se o resultado já foi encontrado ou se o limite de tentativas foi atingido
+    if resultFound or attempt > 30 then
         if attempt > 30 then
             print("Tempo limite excedido")
         end
@@ -34,11 +84,11 @@ function getRecognitionResult(reqId, attempt)
         if status == 200 then
             local result = json.decode(body)
             if result.status == "ok" then
-                resultFound = true  -- Resultado encontrado, define a variável como true
+                resultFound = true
                 print(result.text)
-                return  -- Sai da função e não agenda novas verificações
+                return
             elseif result.status == "notready" then
-                task(3000, function()  -- Aguardar 5 segundos para a próxima tentativa
+                task(3000, function()
                     getRecognitionResult(reqId, attempt + 1)
                 end)
             else
@@ -63,8 +113,7 @@ function uploadImage(base64Image, language, beMyAI)
         if status == 200 then
             local responseJson = json.decode(body)
             if responseJson.status == 'ok' then
-                resultFound = false  -- Redefine a variável para permitir novas verificações
-                -- Chama a função para começar a verificação do resultado
+                resultFound = false
                 getRecognitionResult(responseJson.id, 1)
             else
                 print("Erro ao fazer upload da imagem: " .. responseJson.status)
@@ -92,35 +141,38 @@ end
 
 -- Função para capturar e processar a imagem via API
 function captureAndProcessImage(focus)
-  -- Definir o caminho da pasta baseado na escolha do usuário
-  local directoryPath = focus == 1 and "/sdcard/bemyeyes/obj" or "/sdcard/bemyeyes/prints"
-  
-  ensureDirectoryExists(directoryPath)
-  
-  local imageName = generateImageName()
-  service.copy(imageName)
-  local imagePath = directoryPath .. "/" .. imageName
+    local config = checkAndSetupConfig()
 
-  local screenCaptureFunc = function(bmp)
-      bmp.compress(Bitmap.CompressFormat.PNG, 90, FileOutputStream(File(imagePath)))
-      this.speak("Processando imagem, aguarde.")
-      task(300, function()
-          local fl = io.open(imagePath, "rb")
-          local tfl = fl:read("*a")
-          fl:close()
-          uploadImage(crypt.base64encode(tfl), getLanguageCode(), true)
-      end)
-  end
+    local directoryPath = focus == 1 and "/sdcard/bemyeyes/obj" or "/sdcard/bemyeyes/prints"
+    ensureDirectoryExists(directoryPath)
 
-  if focus == 1 then
-      task(80, function()
-          this.getScreenShot(node, {onScreenCaptureDone = screenCaptureFunc})
-      end)
-  else
-      task(80, function()
-          this.getScreenShot({onScreenCaptureDone = screenCaptureFunc})
-      end)
-  end
+    local imageName = generateImageName()
+    local imagePath = directoryPath .. "/" .. imageName
+
+    local screenCaptureFunc = function(bmp)
+        bmp.compress(Bitmap.CompressFormat.PNG, 90, FileOutputStream(File(imagePath)))
+        this.speak("Processando imagem, aguarde.")
+        task(300, function()
+            local fl = io.open(imagePath, "rb")
+            local tfl = fl:read("*a")
+            fl:close()
+            uploadImage(crypt.base64encode(tfl), getLanguageCode(), true)
+
+            if config and config.copyToClipboard then
+                service.copy(imageName)
+            end
+        end)
+    end
+
+    if focus == 1 then
+        task(80, function()
+            this.getScreenShot(node, {onScreenCaptureDone = screenCaptureFunc})
+        end)
+    else
+        task(80, function()
+            this.getScreenShot({onScreenCaptureDone = screenCaptureFunc})
+        end)
+    end
 end
 
 -- Função para exibir o diálogo de escolha
@@ -133,5 +185,7 @@ function showOptionsDialog()
     end
 end
 
--- Chamar o diálogo para permitir que o usuário escolha
-showOptionsDialog()
+-- Verificação da configuração antes de exibir o diálogo de opções
+if checkAndSetupConfig() then
+    showOptionsDialog()
+end
