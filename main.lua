@@ -46,6 +46,40 @@ function saveConfig(config)
     end
 end
 
+-- Função para exibir o diálogo de configuração para copiar e salvar imagens
+function showConfigDialog()
+    local optionsCopy = {"Sim", "Não"}
+    local optionsSave = {"Sim", "Não"}
+
+    local dlgCopy = LuaDialog().setTitle("Copiar imagem para área de transferência?")
+                        .setItems(optionsCopy)
+                        .show()
+
+    dlgCopy.onItemClick = function(l, v, p, i)
+        dlgCopy.dismiss()
+
+        local copyToClipboard = i == 0  -- 0 para "Sim", 1 para "Não"
+
+        -- Após selecionar a opção de copiar, exibe o diálogo para salvar as imagens
+        local dlgSave = LuaDialog().setTitle("Deseja salvar as imagens no dispositivo?")
+                            .setItems(optionsSave)
+                            .show()
+
+        dlgSave.onItemClick = function(l, v, p, i)
+            dlgSave.dismiss()
+
+            local saveImages = i == 0  -- 0 para "Sim", 1 para "Não"
+
+            -- Salva ambas as configurações no arquivo
+            local config = {copyToClipboard = copyToClipboard, saveImages = saveImages}
+            saveConfig(config)
+
+            -- Exibir o diálogo de escolha após configurar
+            showOptionsDialog()
+        end
+    end
+end
+
 -- Função para verificar se as configurações já existem ou precisam ser definidas
 function checkAndSetupConfig()
     local config = loadConfig()
@@ -53,21 +87,6 @@ function checkAndSetupConfig()
         showConfigDialog()
     else
         return config
-    end
-end
-
--- Função para exibir a tela de configuração
-function showConfigDialog()
-    local options = {"Sim", "Não"}
-    local dlg = LuaDialog().setTitle("Copiar imagem para área de transferência?")
-                        .setItems(options)
-                        .show()
-
-    dlg.onItemClick = function(l, v, p, i)
-        dlg.dismiss()
-        local config = {copyToClipboard = i == 0}  -- 0 para "Sim", 1 para "Não"
-        saveConfig(config)
-        showOptionsDialog()  -- Exibir o diálogo de escolha após configurar
     end
 end
 
@@ -143,14 +162,28 @@ end
 function captureAndProcessImage(focus)
     local config = checkAndSetupConfig()
 
+    -- Diretório para salvar as imagens
     local directoryPath = focus == 1 and "/sdcard/bemyeyes/obj" or "/sdcard/bemyeyes/prints"
-    ensureDirectoryExists(directoryPath)
-
+    
+    -- Diretório temporário para imagens (caso o usuário não queira salvar permanentemente)
+    local tempDir = "/sdcard/cache/"
     local imageName = generateImageName()
+
+        -- Se o usuário não deseja salvar, usamos o diretório de cache temporário
+        if not config.saveImages then
+            ensureDirectoryExists(tempDir)
+            directoryPath = tempDir
+            imageName = "image.jpg"
+        else
+            ensureDirectoryExists(directoryPath)
+        end
+    
     local imagePath = directoryPath .. "/" .. imageName
 
     local screenCaptureFunc = function(bmp)
+        -- Salva a imagem, mesmo que temporariamente
         bmp.compress(Bitmap.CompressFormat.PNG, 90, FileOutputStream(File(imagePath)))
+
         this.speak("Processando imagem, aguarde.")
         task(300, function()
             local fl = io.open(imagePath, "rb")
@@ -158,6 +191,7 @@ function captureAndProcessImage(focus)
             fl:close()
             uploadImage(crypt.base64encode(tfl), getLanguageCode(), true)
 
+            -- Se a opção de copiar estiver ativa, copia o nome da imagem
             if config and config.copyToClipboard then
                 service.copy(imageName)
             end
