@@ -1,5 +1,3 @@
--- Thanks to Ashish Kaushik, who helped me with the Lua language.
-
 require "import"
 crypt = require "crypt"
 json = require "cjson"
@@ -8,12 +6,11 @@ import "com.androlua.*"
 import "android.graphics.Bitmap"
 import "java.util.Locale"
 
+local config = require("config")
 -- Variáveis globais
 vision_api_url = "https://visionbot.ru/apiv2/in.php"
 result_url = "https://visionbot.ru/apiv2/res.php"
 configPath = "/sdcard/config.json"  -- Caminho do arquivo de configuração
-
-local resultFound = false  -- Variável para parar a execução quando o resultado for encontrado
 
 -- Função para recuperar os dois primeiros caracteres do código de idioma
 function getLanguageCode()
@@ -22,6 +19,12 @@ function getLanguageCode()
     local langCode = string.sub(language, 1, 2)  -- Extrai os primeiros dois caracteres
     return langCode
 end
+
+-- Variáveis globais
+local resultFound = false  -- Variável para parar a execução quando o resultado for encontrado
+-- Defina o idioma do dispositivo e as traduções
+local idioma = getLanguageCode()
+local traducoes = config.idiomas[idioma] or config.idiomas["pt_BR"]
 
 -- Função para carregar o arquivo de configuração
 function loadConfig()
@@ -42,17 +45,16 @@ function saveConfig(config)
         file:write(json.encode(config))
         file:close()
     else
-        print("Erro ao salvar configurações.")
+        print(traducoes["ERRO_SALVAR_CONFIGURACOES"])
     end
 end
 
 -- Função para exibir o diálogo de configuração para copiar e salvar imagens
 function showConfigDialog()
-    local optionsSave = {"Sim", "Não"}
-    local optionsCopy = {"Sim", "Não"}
+    local options = {traducoes["SIM"], traducoes["NAO"]}
 
-    local dlgSave = LuaDialog().setTitle("Deseja salvar as imagens no dispositivo?")
-                        .setItems(optionsSave)
+    local dlgSave = LuaDialog().setTitle(traducoes["SALVAR_IMAGENS_DISPOSITIVO"])
+                        .setItems(options)
                         .show()
 
     dlgSave.onItemClick = function(l, v, p, i)
@@ -62,8 +64,8 @@ function showConfigDialog()
 
         if saveImages then
             -- Se a pessoa quer salvar a imagem, exibe o diálogo para copiar o nome
-            local dlgCopy = LuaDialog().setTitle("Copiar imagem para área de transferência?")
-                                .setItems(optionsCopy)
+            local dlgCopy = LuaDialog().setTitle(traducoes["COPIAR_NOME_IMAGEM"])
+                                .setItems(options)
                                 .show()
 
             dlgCopy.onItemClick = function(l, v, p, i)
@@ -103,7 +105,7 @@ end
 function getRecognitionResult(reqId, attempt)
     if resultFound or attempt > 30 then
         if attempt > 30 then
-            print("Tempo limite excedido")
+            print(traducoes["TEMPO_LIMITE_EXCEDIDO"])
         end
         return
     end
@@ -120,10 +122,10 @@ function getRecognitionResult(reqId, attempt)
                     getRecognitionResult(reqId, attempt + 1)
                 end)
             else
-                print("Erro ao obter o resultado: " .. result.status)
+                print(traducoes["ERRO_OBTER_RESULTADO"] .. result.status)
             end
         else
-            print("Erro na requisição: " .. status)
+            print(traducoes["ERRO_REQUISICAO"] .. status)
         end
     end)
 end
@@ -144,10 +146,10 @@ function uploadImage(base64Image, language, beMyAI)
                 resultFound = false
                 getRecognitionResult(responseJson.id, 1)
             else
-                print("Erro ao fazer upload da imagem: " .. responseJson.status)
+                print(traducoes["ERRO_OBTER_RESULTADO"] .. responseJson.status)
             end
         else
-            print("Erro ao fazer upload da imagem: " .. status)
+            print(traducoes["ERRO_REQUISICAO"] .. status)
         end
     end)
 end
@@ -193,12 +195,12 @@ function captureAndProcessImage(focus)
         -- Salva a imagem, mesmo que temporariamente
         bmp.compress(Bitmap.CompressFormat.PNG, 90, FileOutputStream(File(imagePath)))
 
-        this.speak("Processando imagem, aguarde.")
+        this.speak(traducoes["PROCESSANDO_IMAGEM"])
         task(300, function()
             local fl = io.open(imagePath, "rb")
             local tfl = fl:read("*a")
             fl:close()
-            uploadImage(crypt.base64encode(tfl), getLanguageCode(), true)
+            uploadImage(crypt.base64encode(tfl), idioma, true)
 
             -- Se a opção de copiar estiver ativa, copia o nome da imagem
             if config and config.copyToClipboard then
@@ -220,7 +222,7 @@ end
 
 -- Função para exibir o diálogo de escolha
 function showOptionsDialog()
-    local t = {"Reconhecimento do item em Foco", "Reconhecimento de toda a tela"}
+    local t = {traducoes["RECONHECIMENTO_ITEM_FOCO"], traducoes["RECONHECIMENTO_TELA_COMPLETA"]}
     local dlg = LuaDialog().setItems(t).show()
     dlg.onItemClick = function(l, v, p, i)
         dlg.dismiss()
