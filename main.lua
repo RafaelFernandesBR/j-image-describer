@@ -24,7 +24,7 @@ end
 local resultFound = false  -- Variável para parar a execução quando o resultado for encontrado
 -- Defina o idioma do dispositivo e as traduções
 local idioma = getLanguageCode()
-local traducoes = config.idiomas[idioma] or config.idiomas["pt_BR"]
+local traducoes = config.idiomas[idioma] or config.idiomas["en"]
 
 -- Função para carregar o arquivo de configuração
 function loadConfig()
