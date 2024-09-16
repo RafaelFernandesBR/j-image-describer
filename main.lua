@@ -57,8 +57,8 @@ function showConfigDialog()
 
     dlgCopy.onItemClick = function(l, v, p, i)
         dlgCopy.dismiss()
-
-        local copyToClipboard = i == 0  -- 0 para "Sim", 1 para "Não"
+        print(i)
+        local copyToClipboard = i == 1  -- 1 para "Sim", 2 para "Não"
 
         -- Após selecionar a opção de copiar, exibe o diálogo para salvar as imagens
         local dlgSave = LuaDialog().setTitle("Deseja salvar as imagens no dispositivo?")
@@ -68,7 +68,7 @@ function showConfigDialog()
         dlgSave.onItemClick = function(l, v, p, i)
             dlgSave.dismiss()
 
-            local saveImages = i == 0  -- 0 para "Sim", 1 para "Não"
+            local saveImages = i == 1  -- 1 para "Sim", 2 para "Não"
 
             -- Salva ambas as configurações no arquivo
             local config = {copyToClipboard = copyToClipboard, saveImages = saveImages}
