@@ -48,30 +48,39 @@ end
 
 -- Função para exibir o diálogo de configuração para copiar e salvar imagens
 function showConfigDialog()
-    local optionsCopy = {"Sim", "Não"}
     local optionsSave = {"Sim", "Não"}
+    local optionsCopy = {"Sim", "Não"}
 
-    local dlgCopy = LuaDialog().setTitle("Copiar imagem para área de transferência?")
-                        .setItems(optionsCopy)
+    local dlgSave = LuaDialog().setTitle("Deseja salvar as imagens no dispositivo?")
+                        .setItems(optionsSave)
                         .show()
 
-    dlgCopy.onItemClick = function(l, v, p, i)
-        dlgCopy.dismiss()
-        print(i)
-        local copyToClipboard = i == 1  -- 1 para "Sim", 2 para "Não"
+    dlgSave.onItemClick = function(l, v, p, i)
+        dlgSave.dismiss()
 
-        -- Após selecionar a opção de copiar, exibe o diálogo para salvar as imagens
-        local dlgSave = LuaDialog().setTitle("Deseja salvar as imagens no dispositivo?")
-                            .setItems(optionsSave)
-                            .show()
+        local saveImages = i == 1  -- 1 para "Sim", 2 para "Não"
 
-        dlgSave.onItemClick = function(l, v, p, i)
-            dlgSave.dismiss()
+        if saveImages then
+            -- Se a pessoa quer salvar a imagem, exibe o diálogo para copiar o nome
+            local dlgCopy = LuaDialog().setTitle("Copiar imagem para área de transferência?")
+                                .setItems(optionsCopy)
+                                .show()
 
-            local saveImages = i == 1  -- 1 para "Sim", 2 para "Não"
+            dlgCopy.onItemClick = function(l, v, p, i)
+                dlgCopy.dismiss()
 
-            -- Salva ambas as configurações no arquivo
-            local config = {copyToClipboard = copyToClipboard, saveImages = saveImages}
+                local copyToClipboard = i == 1  -- 1 para "Sim", 2 para "Não"
+
+                -- Salva ambas as configurações no arquivo
+                local config = {copyToClipboard = copyToClipboard, saveImages = saveImages}
+                saveConfig(config)
+
+                -- Exibir o diálogo de escolha após configurar
+                showOptionsDialog()
+            end
+        else
+            -- Se a pessoa não quer salvar a imagem, não copia o nome e salva a configuração
+            local config = {copyToClipboard = false, saveImages = saveImages}
             saveConfig(config)
 
             -- Exibir o diálogo de escolha após configurar
