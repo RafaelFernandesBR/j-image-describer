@@ -196,6 +196,7 @@ function captureAndProcessImage(focus)
         bmp.compress(Bitmap.CompressFormat.PNG, 90, FileOutputStream(File(imagePath)))
 
         this.speak(traducoes["PROCESSANDO_IMAGEM"])
+
         task(300, function()
             local fl = io.open(imagePath, "rb")
             local tfl = fl:read("*a")
@@ -210,11 +211,11 @@ function captureAndProcessImage(focus)
     end
 
     if focus == 1 then
-        task(80, function()
+        task(90, function()
             this.getScreenShot(node, {onScreenCaptureDone = screenCaptureFunc})
         end)
     else
-        task(80, function()
+        task(90, function()
             this.getScreenShot({onScreenCaptureDone = screenCaptureFunc})
         end)
     end
