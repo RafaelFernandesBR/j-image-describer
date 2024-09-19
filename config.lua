@@ -17,6 +17,9 @@ local config = {
       ["ERRO_REQUISICAO"] = "Erro na requisição: ",
       ["TEMPO_LIMITE_EXCEDIDO"] = "Tempo limite excedido",
       ["PROCESSANDO_IMAGEM"] = "Processando imagem, aguarde.",
+      ["FALAR_DIALOGO"] = "Falar a descrição em um diálogo ou diretamente?",
+      ["DIRETAMENTE"] = "Diretamente.",
+      ["EM_DIALOGO"] = "Em diálogo.",
       ["SIM"] = "Sim",
       ["NAO"] = "Não",
     },
@@ -33,7 +36,10 @@ local config = {
       ["PROCESSANDO_IMAGEM"] = "Processing image, please wait.",
       ["SIM"] = "Yes",
       ["NAO"] = "No",
-    },
+      ["FALAR_DIALOGO"] = "Speak the description in a dialog or directly?",
+      ["DIRETAMENTE"] = "Directly.",
+      ["EM_DIALOGO"] = "In dialogue.",
+        },
     -- Add your language here, for example:
     -- ["fr"] = {
     --   ["RECONHECIMENTO_ITEM_FOCO"] = "Reconnaissance de l'item en focus",

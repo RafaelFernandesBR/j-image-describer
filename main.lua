@@ -52,7 +52,7 @@ end
 -- obter configurações do usuário
 function showConfigDialog()
     local options = {traducoes["SIM"], traducoes["NAO"]}
-    local optionsSpeak = {"diretamente", "em diálogo"}
+    local optionsSpeak = {traducoes["DIRETAMENTE"], traducoes["EM_DIALOGO"]}
 
     local dlgSave = LuaDialog().setTitle(traducoes["SALVAR_IMAGENS_DISPOSITIVO"])
                         .setItems(options)
@@ -63,7 +63,7 @@ function showConfigDialog()
 
     local function showSpeakDialog()
         -- Exibe o diálogo para escolher se mostrar a descrição em diálogo ou diretamente
-        local dlgSpeak = LuaDialog().setTitle("Falar a descrição em um diálogo ou diretamente?")
+    local dlgSpeak = LuaDialog().setTitle(traducoes["FALAR_DIALOGO"])
                             .setItems(optionsSpeak)
                             .show()
 
