@@ -49,18 +49,43 @@ function saveConfig(config)
     end
 end
 
--- Função para exibir o diálogo de configuração para copiar e salvar imagens
+-- obter configurações do usuário
 function showConfigDialog()
     local options = {traducoes["SIM"], traducoes["NAO"]}
+    local optionsSpeak = {"diretamente", "em diálogo"}
 
     local dlgSave = LuaDialog().setTitle(traducoes["SALVAR_IMAGENS_DISPOSITIVO"])
                         .setItems(options)
                         .show()
 
+    local saveImages = false
+    local copyToClipboard = false
+
+    local function showSpeakDialog()
+        -- Exibe o diálogo para escolher se mostrar a descrição em diálogo ou diretamente
+        local dlgSpeak = LuaDialog().setTitle("Falar a descrição em um diálogo ou diretamente?")
+                            .setItems(optionsSpeak)
+                            .show()
+
+        dlgSpeak.onItemClick = function(l, v, p, i)
+            dlgSpeak.dismiss()
+
+            local speakDirectly = i == 1  -- 1 para "diretamente", 2 para "em diálogo"
+
+            -- Salva a configuração
+            saveConfig({saveImages = saveImages, copyToClipboard = copyToClipboard, speakDirectly = speakDirectly})
+
+            -- Exibir o diálogo de escolha após configurar
+            showOptionsDialog()
+        end
+    end
+
+    local speakDialogRef = showSpeakDialog
+
     dlgSave.onItemClick = function(l, v, p, i)
         dlgSave.dismiss()
 
-        local saveImages = i == 1  -- 1 para "Sim", 2 para "Não"
+        saveImages = i == 1  -- 1 para "Sim", 2 para "Não"
 
         if saveImages then
             -- Se a pessoa quer salvar a imagem, exibe o diálogo para copiar o nome
@@ -68,25 +93,17 @@ function showConfigDialog()
                                 .setItems(options)
                                 .show()
 
+            local copyToClipboardVar = false
             dlgCopy.onItemClick = function(l, v, p, i)
                 dlgCopy.dismiss()
 
-                local copyToClipboard = i == 1  -- 1 para "Sim", 2 para "Não"
-
-                -- Salva ambas as configurações no arquivo
-                local config = {copyToClipboard = copyToClipboard, saveImages = saveImages}
-                saveConfig(config)
-
-                -- Exibir o diálogo de escolha após configurar
-                showOptionsDialog()
+                copyToClipboardVar = i == 1  -- 1 para "Sim", 2 para "Não"
+                copyToClipboard = copyToClipboardVar
+                speakDialogRef()
             end
         else
-            -- Se a pessoa não quer salvar a imagem, não copia o nome e salva a configuração
-            local config = {copyToClipboard = false, saveImages = saveImages}
-            saveConfig(config)
-
-            -- Exibir o diálogo de escolha após configurar
-            showOptionsDialog()
+            copyToClipboard = false
+            speakDialogRef()
         end
     end
 end
@@ -115,7 +132,12 @@ function getRecognitionResult(reqId, attempt)
             local result = json.decode(body)
             if result.status == "ok" then
                 resultFound = true
-                print(result.text)
+                local config = checkAndSetupConfig()
+                if config and config.speakDirectly then
+                    this.speak(result.text)
+                else
+                    print(result.text)
+                end
                 return
             elseif result.status == "notready" then
                 task(3000, function()
