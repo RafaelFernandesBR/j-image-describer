@@ -309,7 +309,7 @@ function processImage(base64Image)
         }
     }
 
-    local url = "https://generativelanguage.googleapis.com/v1beta/models/" .. gemini_model .. ":generateContent?key=" .. API_KEY
+    local url = "https://generativelanguage.googleapis.com/v1/models/" .. gemini_model .. ":generateContent?key=" .. API_KEY
 
     Http.post(url, json.encode(requestBody), headers, function(status, body)
         if status == 200 then
