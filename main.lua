@@ -298,12 +298,16 @@ function processImage(base64Image)
     local promptText = "Describe the image objectively in " .. langNormalized .. ", providing a clear overview of visible elements for visually impaired users. Follow these rules strictly:\n\n- Start with general scene (who/what/where).\n- Highlight main action and key elements.\n- Transcribe all visible text verbatim.\n- Use present tense and active verbs.\n- Focus on relevant visual information only.\n- No introductions, opinions, 'image of', emojis, or redundant phrases.\n- Answer only in " .. langNormalized .. ", pure description.\n\nDescribe following this exact structure."
 
     local requestBody = {
+        systemInstruction = {
+            parts = {
+                { text = promptText }
+            }
+        },
         contents = {
             {
                 role = "user",
                 parts = {
-                    { inlineData = { mimeType = "image/png", data = base64Image } },
-                    { text = promptText }
+                    { inlineData = { mimeType = "image/png", data = base64Image } }
                 }
             }
         }
