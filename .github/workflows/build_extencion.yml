@@ -40,12 +40,9 @@ jobs:
         with:
           name: image-describer
 
-      - name: Rename to PPK
-        run: mv image-describer.ppk image-describer-${{ github.ref_name }}.ppk
-
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
-          files: image-describer-*.ppk
+          files: image-describer/image-describer.ppk
           fail_on_unmatched_files: false
 
