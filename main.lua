@@ -281,7 +281,7 @@ function processImageGrok(base64Image)
                 print(traducoes["ERRO_OBTER_RESULTADO"])
             end
         else
-            print(traducoes["ERRO_REQUISICAO"] .. status)
+            print("Grok Error " .. status .. ": " .. body)
         end
     end)
 end
@@ -307,13 +307,13 @@ function processImage(base64Image)
             {
                 role = "user",
                 parts = {
-                    { inlineData = { mimeType = "image/png", data = base64Image } }
+                    { inlineData = { mimeType = "image/jpeg", data = base64Image } }
                 }
             }
         }
     }
 
-    local url = "https://generativelanguage.googleapis.com/v1/models/" .. gemini_model .. ":generateContent?key=" .. API_KEY
+    local url = "https://generativelanguage.googleapis.com/v1beta/models/" .. gemini_model .. ":generateContent?key=" .. API_KEY
 
     Http.post(url, json.encode(requestBody), headers, function(status, body)
         if status == 200 then
@@ -346,7 +346,7 @@ function processImage(base64Image)
                 print(traducoes["ERRO_OBTER_RESULTADO"])
             end
         else
-            print(traducoes["ERRO_REQUISICAO"] .. status)
+            print("Gemini Error " .. status .. ": " .. body)
         end
     end)
 end
