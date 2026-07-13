@@ -8,8 +8,6 @@ import "java.util.Locale"
 
 local config = require("config")
 -- Variáveis globais
-vision_api_url = "https://visionbot.ru/apiv2/in.php"
-result_url = "https://visionbot.ru/apiv2/res.php"
 configPath = "/sdcard/config.json"  -- Caminho do arquivo de configuração
 
 -- Função para recuperar os dois primeiros caracteres do código de idioma
@@ -21,10 +19,17 @@ function getLanguageCode()
 end
 
 -- Variáveis globais
-local resultFound = false  -- Variável para parar a execução quando o resultado for encontrado
--- Defina o idioma do dispositivo e as traduções
 local idioma = getLanguageCode()
-local traducoes = config.idiomas[idioma] or config.idiomas["en"]
+traducoes = config.idiomas[idioma] or config.idiomas["en"]
+local selectedApi = nil
+
+-- Gemini model and API key
+gemini_model = "gemini-2.5-flash"
+API_KEY = nil
+
+-- Grok API configuration
+grok_model = "grok-4-1-fast-reasoning"
+GROK_API_KEY = nil
 
 -- Função para carregar o arquivo de configuração
 function loadConfig()
@@ -63,7 +68,7 @@ function showConfigDialog()
 
     local function showSpeakDialog()
         -- Exibe o diálogo para escolher se mostrar a descrição em diálogo ou diretamente
-    local dlgSpeak = LuaDialog().setTitle(traducoes["FALAR_DIALOGO"])
+        local dlgSpeak = LuaDialog().setTitle(traducoes["FALAR_DIALOGO"])
                             .setItems(optionsSpeak)
                             .show()
 
@@ -73,7 +78,7 @@ function showConfigDialog()
             local speakDirectly = i == 1  -- 1 para "diretamente", 2 para "em diálogo"
 
             -- Salva a configuração
-            saveConfig({saveImages = saveImages, copyToClipboard = copyToClipboard, speakDirectly = speakDirectly})
+            saveConfig({saveImages = saveImages, copyToClipboard = copyToClipboard, speakDirectly = speakDirectly, grokApiKey = GROK_API_KEY, geminiApiKey = API_KEY, selectedApi = selectedApi})
 
             -- Exibir o diálogo de escolha após configurar
             showOptionsDialog()
@@ -108,43 +113,171 @@ function showConfigDialog()
     end
 end
 
+-- Função para exibir diálogo de configuração de API keys
+function showApiKeysDialog()
+    import "android.widget.LinearLayout"
+    import "android.widget.RadioGroup"
+    import "android.widget.RadioButton"
+    import "android.widget.EditText"
+
+    local layout = LinearLayout(this)
+    layout.setOrientation(LinearLayout.VERTICAL)
+    layout.setPadding(16, 16, 16, 16)
+
+    -- RadioGroup para seleção da API
+    local radioGroup = RadioGroup(this)
+    radioGroup.setOrientation(LinearLayout.VERTICAL)
+
+    local radioBtnGrok = RadioButton(this)
+    radioBtnGrok.setText("Grok (xAI)")
+    radioBtnGrok.setId(1)
+
+    local radioBtnGemini = RadioButton(this)
+    radioBtnGemini.setText("Gemini (Google)")
+    radioBtnGemini.setId(2)
+
+    radioGroup.addView(radioBtnGrok)
+    radioGroup.addView(radioBtnGemini)
+    radioGroup.check(selectedApi == "gemini" and 2 or 1)
+
+    layout.addView(radioGroup)
+
+    -- Campo de edição para a chave
+    local editKey = EditText(this)
+    editKey.setInputType(129)
+    layout.addView(editKey)
+
+    -- Atualizar hint e valor do editText quando mudar seleção
+    local updateEditText = function()
+        local selectedId = radioGroup.getCheckedRadioButtonId()
+        selectedApi = selectedId == 2 and "gemini" or "grok"
+        local currentKey = selectedApi == "grok" and (GROK_API_KEY or "") or (API_KEY or "")
+        editKey.setHint(selectedApi == "grok" and traducoes["CHAVE_GROK"] or traducoes["CHAVE_GEMINI"])
+        editKey.setText(currentKey)
+    end
+
+    updateEditText()
+
+    radioGroup.setOnCheckedChangeListener(function(group, checkedId)
+        updateEditText()
+    end)
+
+    LuaDialog()
+        .setTitle(traducoes["CONFIGURAR_API_KEYS"])
+        .setView(layout)
+        .setPositiveButton(traducoes["SIM"], function()
+            if selectedApi == "grok" then
+                GROK_API_KEY = editKey.getText().toString()
+            else
+                API_KEY = editKey.getText().toString()
+            end
+            showConfigDialog()
+        end)
+        .setNegativeButton(traducoes["NAO"], function()
+            showConfigDialog()
+        end)
+        .show()
+end
+
 -- Função para verificar se as configurações já existem ou precisam ser definidas
 function checkAndSetupConfig()
-    local config = loadConfig()
-    if config == nil then
-        showConfigDialog()
+    local loadedConfig = loadConfig()
+    if loadedConfig == nil then
+        showApiKeysDialog()
     else
-        return config
+        -- Carrega as chaves de API do config salvo
+        if loadedConfig.grokApiKey then
+            GROK_API_KEY = loadedConfig.grokApiKey
+        end
+        if loadedConfig.geminiApiKey then
+            API_KEY = loadedConfig.geminiApiKey
+        end
+        if loadedConfig.selectedApi then
+            selectedApi = loadedConfig.selectedApi
+        end
+        return loadedConfig
     end
 end
 
--- Função para obter resultado
-function getRecognitionResult(reqId, attempt)
-    if resultFound or attempt > 30 then
-        if attempt > 30 then
-            print(traducoes["TEMPO_LIMITE_EXCEDIDO"])
-        end
-        return
-    end
+-- Função para obter a API selecionada pelo usuário
+function getSelectedApi()
+    return selectedApi or "grok"
+end
 
-    Http.post(result_url, {id = reqId}, {}, function(status, body)
+-- Função para processar a imagem com a API selecionada
+function processImageWithSelectedApi(base64Image)
+    local api = getSelectedApi()
+    if api == "gemini" then
+        processImage(base64Image)
+    else
+        processImageGrok(base64Image)
+    end
+end
+
+-- Função para processar a imagem via Grok API
+function processImageGrok(base64Image)
+    local headers = {
+        ["Content-Type"] = "application/json",
+        ["Authorization"] = "Bearer " .. GROK_API_KEY
+    }
+
+    local langNormalized = (idioma or "pt-BR"):gsub("%-%-?", "_")
+    if langNormalized == "" then langNormalized = "pt_BR" end
+
+    local promptText = "Describe the image objectively in " .. langNormalized .. ", providing a clear overview of visible elements for visually impaired users. Follow these rules strictly:\n\n- Start with general scene (who/what/where).\n- Highlight main action and key elements.\n- Transcribe all visible text verbatim.\n- Use present tense and active verbs.\n- Focus on relevant visual information only.\n- No introductions, opinions, 'image of', emojis, or redundant phrases.\n- Answer only in " .. langNormalized .. ", pure description.\n\nDescribe following this exact structure."
+
+    local requestBody = {
+        input = {
+            {
+                role = "user",
+                content = {
+                    {
+                        type = "input_image",
+                        image_url = "data:image/jpeg;base64," .. base64Image,
+                        detail = "high"
+                    },
+                    {
+                        type = "input_text",
+                        text = promptText
+                    }
+                }
+            }
+        },
+        model = grok_model
+    }
+
+    local url = "https://api.x.ai/v1/responses"
+
+    Http.post(url, json.encode(requestBody), headers, function(status, body)
         if status == 200 then
-            local result = json.decode(body)
-            if result.status == "ok" then
-                resultFound = true
-                local config = checkAndSetupConfig()
-                if config and config.speakDirectly then
-                    this.speak(result.text)
-                else
-                    print(result.text)
+            local response = json.decode(body)
+            local config = checkAndSetupConfig()
+
+            if response and response.output and #response.output > 0 then
+                -- Iterar por todos os outputs (não apenas o primeiro)
+                local description = nil
+                for _, output in ipairs(response.output) do
+                    if output.content and #output.content > 0 then
+                        for _, content in ipairs(output.content) do
+                            if content.type == "output_text" and content.text then
+                                description = content.text
+                                break
+                            end
+                        end
+                        if description then break end
+                    end
                 end
-                return
-            elseif result.status == "notready" then
-                task(3000, function()
-                    getRecognitionResult(reqId, attempt + 1)
-                end)
+
+                if description then
+                    showDescriptionDialog(description)
+                    if config and config.speakDirectly then
+                        this.speak(description)
+                    end
+                else
+                    print(traducoes["ERRO_OBTER_RESULTADO"])
+                end
             else
-                print(traducoes["ERRO_OBTER_RESULTADO"] .. result.status)
+                print(traducoes["ERRO_OBTER_RESULTADO"])
             end
         else
             print(traducoes["ERRO_REQUISICAO"] .. status)
@@ -152,28 +285,107 @@ function getRecognitionResult(reqId, attempt)
     end)
 end
 
--- Função para fazer o upload da imagem para a API
-function uploadImage(base64Image, language, beMyAI)
-    local bm = beMyAI and '1' or '0'
+-- Função para processar a imagem via Gemini API (método antigo mantido)
+function processImage(base64Image)
+    local headers = {
+        ["Content-Type"] = "application/json"
+    }
 
-    Http.post(vision_api_url, {
-        body = base64Image,
-        lang = language,
-        target = 'nothing',
-        bm = bm
-    }, {}, function(status, body)
+    local langNormalized = (idioma or "pt-BR"):gsub("%-%-?", "_")
+    if langNormalized == "" then langNormalized = "pt_BR" end
+
+    local promptText = "Describe the image objectively in " .. langNormalized .. ", providing a clear overview of visible elements for visually impaired users. Follow these rules strictly:\n\n- Start with general scene (who/what/where).\n- Highlight main action and key elements.\n- Transcribe all visible text verbatim.\n- Use present tense and active verbs.\n- Focus on relevant visual information only.\n- No introductions, opinions, 'image of', emojis, or redundant phrases.\n- Answer only in " .. langNormalized .. ", pure description.\n\nDescribe following this exact structure."
+
+    local requestBody = {
+        contents = {
+            {
+                role = "user",
+                parts = {
+                    { inlineData = { mimeType = "image/png", data = base64Image } },
+                    { text = promptText }
+                }
+            }
+        }
+    }
+
+    local url = "https://generativelanguage.googleapis.com/v1beta/models/" .. gemini_model .. ":generateContent?key=" .. API_KEY
+
+    Http.post(url, json.encode(requestBody), headers, function(status, body)
         if status == 200 then
-            local responseJson = json.decode(body)
-            if responseJson.status == 'ok' then
-                resultFound = false
-                getRecognitionResult(responseJson.id, 1)
+            local response = json.decode(body)
+            local config = checkAndSetupConfig()
+
+            local candidate = nil
+            if response and response.candidates and #response.candidates > 0 then
+                candidate = response.candidates[1]
+            end
+
+            if candidate and candidate.content and candidate.content.parts then
+                local textPart = nil
+                for _, p in ipairs(candidate.content.parts) do
+                    if type(p.text) == "string" then
+                        textPart = p
+                        break
+                    end
+                end
+
+                if textPart and textPart.text then
+                    showDescriptionDialog(textPart.text)
+                    if config and config.speakDirectly then
+                        this.speak(textPart.text)
+                    end
+                else
+                    print(traducoes["ERRO_OBTER_RESULTADO"])
+                end
             else
-                print(traducoes["ERRO_OBTER_RESULTADO"] .. responseJson.status)
+                print(traducoes["ERRO_OBTER_RESULTADO"])
             end
         else
             print(traducoes["ERRO_REQUISICAO"] .. status)
         end
     end)
+end
+
+-- Função para exibir a descrição da imagem em um diálogo
+function showDescriptionDialog(description)
+    import "android.widget.LinearLayout"
+    import "android.widget.TextView"
+    import "android.widget.ScrollView"
+    import "android.view.ViewGroup"
+
+    local idioma = getLanguageCode()
+    local trad = config.idiomas[idioma] or config.idiomas["en"]
+
+    local mainLayout = LinearLayout(this)
+    mainLayout.setOrientation(LinearLayout.VERTICAL)
+    mainLayout.setPadding(16, 16, 16, 16)
+
+    local scrollView = ScrollView(this)
+    local params = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 400)
+    scrollView.setLayoutParams(params)
+
+    local layout = LinearLayout(this)
+    layout.setOrientation(LinearLayout.VERTICAL)
+
+    local textView = TextView(this)
+    textView.setText(description)
+    textView.setTextSize(16)
+    textView.setTextIsSelectable(true)
+    layout.addView(textView)
+
+    scrollView.addView(layout)
+    mainLayout.addView(scrollView)
+
+    LuaDialog()
+        .setTitle(trad["DESCRICAO_IMAGEM"])
+        .setView(mainLayout)
+        .setPositiveButton(trad["COPIAR"], function()
+            service.copy(description)
+            this.speak(trad["COPIADO"])
+        end)
+        .setNegativeButton(trad["FECHAR"], function()
+        end)
+        .show()
 end
 
 -- Função para garantir que a pasta exista
@@ -191,30 +403,25 @@ function generateImageName()
     return string.format("image_%d_%d.jpg", timestamp, randomNum)
 end
 
--- Função para capturar e processar a imagem via API
+-- Função para capturar e processar a imagem
 function captureAndProcessImage(focus)
     local config = checkAndSetupConfig()
 
-    -- Diretório para salvar as imagens
     local directoryPath = focus == 1 and "/sdcard/bemyeyes/obj" or "/sdcard/bemyeyes/prints"
-    
-    -- Diretório temporário para imagens (caso o usuário não queira salvar permanentemente)
     local tempDir = "/sdcard/cache/"
     local imageName = generateImageName()
 
-        -- Se o usuário não deseja salvar, usamos o diretório de cache temporário
-        if not config.saveImages then
-            ensureDirectoryExists(tempDir)
-            directoryPath = tempDir
-            imageName = "image.jpg"
-        else
-            ensureDirectoryExists(directoryPath)
-        end
+    if not config.saveImages then
+        ensureDirectoryExists(tempDir)
+        directoryPath = tempDir
+        imageName = "image.jpg"
+    else
+        ensureDirectoryExists(directoryPath)
+    end
     
     local imagePath = directoryPath .. "/" .. imageName
 
     local screenCaptureFunc = function(bmp)
-        -- Salva a imagem, mesmo que temporariamente
         bmp.compress(Bitmap.CompressFormat.PNG, 90, FileOutputStream(File(imagePath)))
 
         this.speak(traducoes["PROCESSANDO_IMAGEM"])
@@ -223,9 +430,8 @@ function captureAndProcessImage(focus)
             local fl = io.open(imagePath, "rb")
             local tfl = fl:read("*a")
             fl:close()
-            uploadImage(crypt.base64encode(tfl), idioma, true)
+            processImageWithSelectedApi(crypt.base64encode(tfl))
 
-            -- Se a opção de copiar estiver ativa, copia o nome da imagem
             if config and config.copyToClipboard then
                 service.copy(imageName)
             end

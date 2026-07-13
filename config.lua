@@ -22,6 +22,14 @@ local config = {
       ["EM_DIALOGO"] = "Em diálogo.",
       ["SIM"] = "Sim",
       ["NAO"] = "Não",
+      ["CONFIGURAR_API_KEYS"] = "Configurar Chaves de API",
+      ["CHAVE_GROK"] = "Chave Grok (xAI):",
+      ["CHAVE_GEMINI"] = "Chave Gemini (Google):",
+      ["SELECIONAR_API"] = "Qual API deseja usar?",
+      ["DESCRICAO_IMAGEM"] = "Descrição da Imagem",
+      ["COPIAR"] = "Copiar",
+      ["FECHAR"] = "Fechar",
+      ["COPIADO"] = "Descrição copiada para área de transferência!",
     },
     -- English (en)
     ["en"] = {
@@ -39,6 +47,14 @@ local config = {
       ["FALAR_DIALOGO"] = "Speak the description in a dialog or directly?",
       ["DIRETAMENTE"] = "Directly.",
       ["EM_DIALOGO"] = "In dialogue.",
+      ["CONFIGURAR_API_KEYS"] = "Configure API Keys",
+      ["CHAVE_GROK"] = "Grok API Key (xAI):",
+      ["CHAVE_GEMINI"] = "Gemini API Key (Google):",
+      ["SELECIONAR_API"] = "Which API do you want to use?",
+      ["DESCRICAO_IMAGEM"] = "Image Description",
+      ["COPIAR"] = "Copy",
+      ["FECHAR"] = "Close",
+      ["COPIADO"] = "Description copied to clipboard!",
         },
     -- Add your language here, for example:
     -- ["fr"] = {
