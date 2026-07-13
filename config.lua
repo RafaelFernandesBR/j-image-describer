@@ -30,6 +30,7 @@ local config = {
       ["COPIAR"] = "Copiar",
       ["FECHAR"] = "Fechar",
       ["COPIADO"] = "Descrição copiada para área de transferência!",
+      ["OPCOES"] = "Opções",
     },
     -- English (en)
     ["en"] = {
@@ -55,6 +56,7 @@ local config = {
       ["COPIAR"] = "Copy",
       ["FECHAR"] = "Close",
       ["COPIADO"] = "Description copied to clipboard!",
+      ["OPCOES"] = "Options",
         },
     -- Add your language here, for example:
     -- ["fr"] = {

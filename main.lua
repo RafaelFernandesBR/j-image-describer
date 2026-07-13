@@ -22,6 +22,7 @@ end
 local idioma = getLanguageCode()
 traducoes = config.idiomas[idioma] or config.idiomas["en"]
 local selectedApi = nil
+local dlg = nil
 
 -- Gemini model and API key
 gemini_model = "gemini-2.5-flash"
@@ -439,24 +440,79 @@ function captureAndProcessImage(focus)
     end
 
     if focus == 1 then
-        task(90, function()
+        task(300, function()
             this.getScreenShot(node, {onScreenCaptureDone = screenCaptureFunc})
         end)
     else
-        task(90, function()
+        task(300, function()
             this.getScreenShot({onScreenCaptureDone = screenCaptureFunc})
         end)
     end
 end
 
--- Função para exibir o diálogo de escolha
+-- Função para exibir o diálogo de escolha com layout personalizado
 function showOptionsDialog()
-    local t = {traducoes["RECONHECIMENTO_ITEM_FOCO"], traducoes["RECONHECIMENTO_TELA_COMPLETA"]}
-    local dlg = LuaDialog().setItems(t).show()
-    dlg.onItemClick = function(l, v, p, i)
+    import "android.widget.LinearLayout"
+    import "android.widget.Button"
+    import "android.view.ViewGroup"
+
+    local idioma = getLanguageCode()
+    local trad = config.idiomas[idioma] or config.idiomas["en"]
+
+    local layout = LinearLayout(this)
+    layout.setOrientation(LinearLayout.VERTICAL)
+    layout.setPadding(20, 20, 20, 20)
+
+    -- Botão Reconhecimento do item em foco
+    local btnFoco = Button(this)
+    btnFoco.setText(trad["RECONHECIMENTO_ITEM_FOCO"])
+    btnFoco.setTextSize(16)
+    local paramsFoco = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 100)
+    btnFoco.setLayoutParams(paramsFoco)
+    btnFoco.setOnClickListener(function()
         dlg.dismiss()
-        captureAndProcessImage(i)
-    end
+        captureAndProcessImage(1)
+    end)
+    layout.addView(btnFoco)
+
+    -- Espaço entre botões
+    local space1 = LinearLayout(this)
+    local paramsSpace = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 20)
+    space1.setLayoutParams(paramsSpace)
+    layout.addView(space1)
+
+    -- Botão Reconhecimento de toda a tela
+    local btnTela = Button(this)
+    btnTela.setText(trad["RECONHECIMENTO_TELA_COMPLETA"])
+    btnTela.setTextSize(16)
+    local paramsTela = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 100)
+    btnTela.setLayoutParams(paramsTela)
+    btnTela.setOnClickListener(function()
+        dlg.dismiss()
+        captureAndProcessImage(2)
+    end)
+    layout.addView(btnTela)
+
+    -- Espaço entre botões
+    local space2 = LinearLayout(this)
+    space2.setLayoutParams(paramsSpace)
+    layout.addView(space2)
+
+    -- Botão Fechar
+    local btnFechar = Button(this)
+    btnFechar.setText(trad["FECHAR"])
+    btnFechar.setTextSize(16)
+    local paramsFechar = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 100)
+    btnFechar.setLayoutParams(paramsFechar)
+    btnFechar.setOnClickListener(function()
+        dlg.dismiss()
+    end)
+    layout.addView(btnFechar)
+
+    dlg = LuaDialog()
+        .setTitle(trad["OPCOES"])
+        .setView(layout)
+        .show()
 end
 
 -- Verificação da configuração antes de exibir o diálogo de opções
