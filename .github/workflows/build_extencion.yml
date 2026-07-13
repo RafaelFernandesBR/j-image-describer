@@ -40,9 +40,11 @@ jobs:
         with:
           name: image-describer
 
+      - name: List files
+        run: ls -la
+
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
-          files: image-describer/image-describer.ppk
-          fail_on_unmatched_files: false
+          files: image-describer.ppk
 
