@@ -25,7 +25,7 @@ local selectedApi = nil
 local dlg = nil
 
 -- Gemini model and API key
-gemini_model = "gemini-3.5-flash"
+gemini_model = "gemini-3.1-flash-lite"
 API_KEY = nil
 
 -- Grok API configuration
