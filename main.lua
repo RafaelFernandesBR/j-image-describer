@@ -604,6 +604,16 @@ function showChatDialog(initialDescription)
     listParams.weight = 1
     listView.setLayoutParams(listParams)
 
+    -- Copia a mensagem para a área de transferência ao tocar no item
+    listView.setOnItemClickListener(function(parent, view, position, id)
+        -- position pode vir 0-based (padrão Android) ou 1-based, dependendo do binding do AndroLua+
+        local msg = currentChat.messages[position + 1] or currentChat.messages[position]
+        if msg then
+            service.copy(msg.text)
+            this.speak(trad["MENSAGEM_COPIADA"])
+        end
+    end)
+
     local function updateChatList()
         local messages = {}
         for _, msg in ipairs(currentChat.messages) do
