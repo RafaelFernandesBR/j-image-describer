@@ -483,7 +483,12 @@ function sendChatMessage(userMessage, updateChatList, editText)
 
     Http.post(url, json.encode(requestBody), headers, function(status, body)
         if status == 200 then
-            local response = json.decode(body)
+            local success, response = pcall(function() return json.decode(body) end)
+            if not success or not response then
+                this.speak(traducoes["ERRO_OBTER_RESULTADO"])
+                return
+            end
+
             local assistantMessage = nil
 
             if api == "gemini" then
@@ -582,6 +587,7 @@ function showChatDialog(initialDescription)
     import "android.widget.EditText"
     import "android.widget.Button"
     import "android.view.ViewGroup"
+    import "android.view.inputmethod.InputMethodManager"
 
     local idioma = getLanguageCode()
     local trad = config.idiomas[idioma] or config.idiomas["en"]
@@ -653,6 +659,11 @@ function showChatDialog(initialDescription)
     btnSend.setOnClickListener(function()
         local userInput = editText.getText().toString()
         if userInput and userInput ~= "" then
+            -- Hide keyboard
+            local imm = this.getSystemService("input_method")
+            if imm then
+                imm.hideSoftInputFromWindow(editText.getWindowToken(), 0)
+            end
             sendChatMessage(userInput, updateChatList, editText)
         end
     end)
