@@ -30,6 +30,10 @@ local config = {
       ["COPIAR"] = "Copiar",
       ["FECHAR"] = "Fechar",
       ["COPIADO"] = "Descrição copiada para área de transferência!",
+      ["COPIADO_HISTORICO"] = "Histórico do chat copiado!",
+      ["ENVIAR"] = "Enviar",
+      ["MENSAGEM_VAZIA"] = "Digite uma pergunta...",
+      ["VOCE"] = "Você",
       ["OPCOES"] = "Opções",
     },
     -- English (en)
@@ -56,6 +60,10 @@ local config = {
       ["COPIAR"] = "Copy",
       ["FECHAR"] = "Close",
       ["COPIADO"] = "Description copied to clipboard!",
+      ["COPIADO_HISTORICO"] = "Chat history copied!",
+      ["ENVIAR"] = "Send",
+      ["MENSAGEM_VAZIA"] = "Type a question...",
+      ["VOCE"] = "You",
       ["OPCOES"] = "Options",
         },
     -- Add your language here, for example:

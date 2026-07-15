@@ -32,6 +32,12 @@ API_KEY = nil
 grok_model = "grok-4-1-fast-reasoning"
 GROK_API_KEY = nil
 
+-- Chat state (in-memory only, no persistence)
+local currentChat = {
+    imageBase64 = nil,
+    messages = {}
+}
+
 -- Função para carregar o arquivo de configuração
 function loadConfig()
     local file = io.open(configPath, "r")
@@ -270,7 +276,8 @@ function processImageGrok(base64Image)
                 end
 
                 if description then
-                    showDescriptionDialog(description)
+                    initializeChat(base64Image)
+                    showChatDialog(description)
                     if config and config.speakDirectly then
                         this.speak(description)
                     end
@@ -335,7 +342,8 @@ function processImage(base64Image)
                 end
 
                 if textPart and textPart.text then
-                    showDescriptionDialog(textPart.text)
+                    initializeChat(base64Image)
+                    showChatDialog(textPart.text)
                     if config and config.speakDirectly then
                         this.speak(textPart.text)
                     end
@@ -347,6 +355,179 @@ function processImage(base64Image)
             end
         else
             print("Gemini Error " .. status .. ": " .. body)
+        end
+    end)
+end
+
+-- Chat management functions
+function initializeChat(imageBase64)
+    currentChat.imageBase64 = imageBase64
+    currentChat.messages = {}
+end
+
+function addMessageToChat(role, text)
+    table.insert(currentChat.messages, {role = role, text = text})
+end
+
+function buildContextForAPI()
+    local context = ""
+    local messageCount = #currentChat.messages
+    local startIndex = 1
+
+    -- Truncate to last 20 messages if history is too large
+    if messageCount > 20 then
+        startIndex = messageCount - 19
+    end
+
+    for i = startIndex, messageCount do
+        local msg = currentChat.messages[i]
+        if msg.role == "user" then
+            context = context .. "User: " .. msg.text .. "\n"
+        else
+            context = context .. "Assistant: " .. msg.text .. "\n"
+        end
+    end
+    return context
+end
+
+function clearChat()
+    currentChat = {imageBase64 = nil, messages = {}}
+end
+
+function formatChatHistory()
+    local text = ""
+    for _, msg in ipairs(currentChat.messages) do
+        if msg.role == "user" then
+            text = text .. "[" .. traducoes["VOCE"] .. "]: " .. msg.text .. "\n\n"
+        else
+            text = text .. "[IA]: " .. msg.text .. "\n\n"
+        end
+    end
+    return text
+end
+
+function sendChatMessage(userMessage, updateChatList, editText)
+    if not userMessage or userMessage:match("^%s*$") then
+        this.speak(traducoes["MENSAGEM_VAZIA"])
+        return
+    end
+
+    addMessageToChat("user", userMessage)
+    editText.setText("")
+
+    local context = buildContextForAPI()
+    local api = getSelectedApi()
+
+    local headers = {
+        ["Content-Type"] = "application/json"
+    }
+
+    local requestBody
+    local url
+
+    if api == "gemini" then
+        local langNormalized = (idioma or "pt-BR"):gsub("%-%-?", "_")
+        if langNormalized == "" then langNormalized = "pt_BR" end
+
+        local systemPrompt = "You are a helpful assistant describing images. Previous context:\n" .. context .. "\nContinue answering based on the image and previous conversation in " .. langNormalized
+
+        requestBody = {
+            systemInstruction = {
+                parts = {
+                    { text = systemPrompt }
+                }
+            },
+            contents = {
+                {
+                    role = "user",
+                    parts = {
+                        { inlineData = { mimeType = "image/jpeg", data = currentChat.imageBase64 } }
+                    }
+                }
+            }
+        }
+
+        url = "https://generativelanguage.googleapis.com/v1beta/models/" .. gemini_model .. ":generateContent?key=" .. API_KEY
+    else
+        headers["Authorization"] = "Bearer " .. GROK_API_KEY
+
+        local langNormalized = (idioma or "pt-BR"):gsub("%-%-?", "_")
+        if langNormalized == "" then langNormalized = "pt_BR" end
+
+        local systemPrompt = "You are a helpful assistant describing images for visually impaired users. Previous context:\n" .. context .. "\nContinue answering based on the image and previous conversation in " .. langNormalized
+
+        requestBody = {
+            input = {
+                {
+                    role = "user",
+                    content = {
+                        {
+                            type = "input_image",
+                            image_url = "data:image/jpeg;base64," .. currentChat.imageBase64,
+                            detail = "high"
+                        },
+                        {
+                            type = "input_text",
+                            text = systemPrompt
+                        }
+                    }
+                }
+            },
+            model = grok_model
+        }
+
+        url = "https://api.x.ai/v1/responses"
+    end
+
+    this.speak(traducoes["PROCESSANDO_IMAGEM"])
+
+    Http.post(url, json.encode(requestBody), headers, function(status, body)
+        if status == 200 then
+            local response = json.decode(body)
+            local assistantMessage = nil
+
+            if api == "gemini" then
+                if response and response.candidates and #response.candidates > 0 then
+                    local candidate = response.candidates[1]
+                    if candidate.content and candidate.content.parts then
+                        for _, p in ipairs(candidate.content.parts) do
+                            if type(p.text) == "string" then
+                                assistantMessage = p.text
+                                break
+                            end
+                        end
+                    end
+                end
+            else
+                if response and response.output and #response.output > 0 then
+                    for _, output in ipairs(response.output) do
+                        if output.content and #output.content > 0 then
+                            for _, content in ipairs(output.content) do
+                                if content.type == "output_text" and content.text then
+                                    assistantMessage = content.text
+                                    break
+                                end
+                            end
+                            if assistantMessage then break end
+                        end
+                    end
+                end
+            end
+
+            if assistantMessage then
+                addMessageToChat("assistant", assistantMessage)
+
+                -- Update UI on main thread
+                if updateChatList then
+                    updateChatList()
+                end
+
+                this.speak(assistantMessage)
+            else
+                this.speak(traducoes["ERRO_OBTER_RESULTADO"])
+            end
+        else
+            this.speak("Error " .. status)
         end
     end)
 end
@@ -390,6 +571,125 @@ function showDescriptionDialog(description)
         end)
         .setNegativeButton(trad["FECHAR"], function()
         end)
+        .show()
+end
+
+-- Chat dialog with interactive input
+function showChatDialog(initialDescription)
+    import "android.widget.LinearLayout"
+    import "android.widget.ListView"
+    import "android.widget.ArrayAdapter"
+    import "android.widget.EditText"
+    import "android.widget.Button"
+    import "android.view.ViewGroup"
+
+    local idioma = getLanguageCode()
+    local trad = config.idiomas[idioma] or config.idiomas["en"]
+
+    addMessageToChat("assistant", initialDescription)
+
+    local mainLayout = LinearLayout(this)
+    mainLayout.setOrientation(LinearLayout.VERTICAL)
+    mainLayout.setPadding(16, 16, 16, 16)
+
+    -- ListView for chat history (takes most of the space)
+    local listView = ListView(this)
+    local listParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0)
+    listParams.weight = 1
+    listView.setLayoutParams(listParams)
+
+    local function updateChatList()
+        local messages = {}
+        for _, msg in ipairs(currentChat.messages) do
+            if msg.role == "user" then
+                table.insert(messages, "[" .. trad["VOCE"] .. "]: " .. msg.text)
+            else
+                table.insert(messages, "[IA]: " .. msg.text)
+            end
+        end
+
+        local adapter = ArrayAdapter(this, android.R.layout.simple_list_item_1, messages)
+        listView.setAdapter(adapter)
+        -- Scroll to bottom
+        if #messages > 0 then
+            listView.setSelection(#messages - 1)
+        end
+    end
+
+    updateChatList()
+    mainLayout.addView(listView)
+
+    -- Bottom layout: EditText + Buttons
+    local bottomLayout = LinearLayout(this)
+    bottomLayout.setOrientation(LinearLayout.HORIZONTAL)
+    local bottomParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+    bottomLayout.setLayoutParams(bottomParams)
+
+    -- Input field (takes more space)
+    local editText = EditText(this)
+    editText.setHint(trad["MENSAGEM_VAZIA"])
+    editText.setTextSize(14)
+    local editParams = LinearLayout.LayoutParams(0, 60)
+    editParams.weight = 1
+    editParams.setMargins(0, 5, 5, 0)
+    editText.setLayoutParams(editParams)
+    bottomLayout.addView(editText)
+
+    -- Buttons layout (horizontal)
+    local buttonsLayout = LinearLayout(this)
+    buttonsLayout.setOrientation(LinearLayout.HORIZONTAL)
+    local buttonsParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, 60)
+    buttonsLayout.setLayoutParams(buttonsParams)
+
+    -- Close button reference for later
+    local dlg = nil
+
+    -- Send button
+    local btnSend = Button(this)
+    btnSend.setText(trad["ENVIAR"])
+    local btnSendParams = LinearLayout.LayoutParams(0, 60)
+    btnSendParams.weight = 1
+    btnSend.setLayoutParams(btnSendParams)
+    btnSend.setOnClickListener(function()
+        local userInput = editText.getText().toString()
+        if userInput and userInput ~= "" then
+            sendChatMessage(userInput, updateChatList, editText)
+        end
+    end)
+    buttonsLayout.addView(btnSend)
+
+    -- Copy button
+    local btnCopy = Button(this)
+    btnCopy.setText(trad["COPIAR"])
+    local btnCopyParams = LinearLayout.LayoutParams(0, 60)
+    btnCopyParams.weight = 1
+    btnCopy.setLayoutParams(btnCopyParams)
+    btnCopy.setOnClickListener(function()
+        service.copy(formatChatHistory())
+        this.speak(trad["COPIADO_HISTORICO"])
+    end)
+    buttonsLayout.addView(btnCopy)
+
+    -- Close button
+    local btnClose = Button(this)
+    btnClose.setText(trad["FECHAR"])
+    local btnCloseParams = LinearLayout.LayoutParams(0, 60)
+    btnCloseParams.weight = 1
+    btnClose.setLayoutParams(btnCloseParams)
+    btnClose.setOnClickListener(function()
+        clearChat()
+        if dlg then
+            dlg.dismiss()
+        end
+    end)
+    buttonsLayout.addView(btnClose)
+
+    bottomLayout.addView(buttonsLayout)
+    mainLayout.addView(bottomLayout)
+
+    dlg = LuaDialog()
+        .setTitle(trad["DESCRICAO_IMAGEM"])
+        .setView(mainLayout)
         .show()
 end
 
